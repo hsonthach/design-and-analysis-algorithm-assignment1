@@ -2,7 +2,7 @@
 from math import sqrt
 from random import shuffle, randint
 import argparse
-
+from copy import deepcopy
 
 # TODO: Logs
 
@@ -117,7 +117,7 @@ def solve(problem_grid, population_size=10, selection_rate=0.5, max_generations_
     # this is done to avoid changes in the input argument
     problem_grid = deep_copy_grid(problem_grid)
 
-    def same_box_indexes(i, j, itself=True):
+    def same_box_indexes(i, j, grid, itself=True):
         """
         A generator function that yields indexes of the elements that are in the same box as the input indexes.
 
@@ -127,7 +127,7 @@ def solve(problem_grid, population_size=10, selection_rate=0.5, max_generations_
             - itself (bool) (optional=True): Indicates whether to yield the input indexes or not.
         """
 
-        for k in range(len(problem_grid)):
+        for k in range(len(grid)):
             if k == j and not itself:
                 continue
 
@@ -158,7 +158,7 @@ def solve(problem_grid, population_size=10, selection_rate=0.5, max_generations_
             """
 
             # remove from same sub-grid cells
-            for a, b in same_box_indexes(i, j, itself=False):
+            for a, b in same_box_indexes(i, j, problem_grid, itself=False):
                 try:
                     track_grid[a][b].remove(problem_grid[i][j])
                 except (ValueError, AttributeError) as e:
@@ -188,8 +188,8 @@ def solve(problem_grid, population_size=10, selection_rate=0.5, max_generations_
             anything_changed = False
             '''
             Lookup the whole track_grid to see if there is
-            any safe move, if there is we continue make 
-            track_grid more likely to have another safe move 
+            any safe move, if there is we continue make
+            track_grid more likely to have another safe move
             by continue pencil mark the found safe move.
             '''
             for i in range(len(problem_grid)):
@@ -261,9 +261,9 @@ def solve(problem_grid, population_size=10, selection_rate=0.5, max_generations_
         row_duplicates_count = 0
 
         # calculate rows duplicates
-        for a, b in same_column_indexes(problem_grid, 0, 0, N):
+        for a, b in same_column_indexes(grid, 0, 0, N):
             row = list(get_cells_from_indexes(
-                grid, same_row_indexes(problem_grid, a, b, N)))
+                grid, same_row_indexes(grid, a, b, N)))
 
             row_duplicates_count += len(row) - len(set(row))
 
@@ -312,41 +312,17 @@ def solve(problem_grid, population_size=10, selection_rate=0.5, max_generations_
     for i in range(max_generations_count):
         # Survivals (sorted) and its best finess
         survivals, best_fitness = selection(survivals)
+        print("Best fitness, generation, number of survivals")
         print(best_fitness, i, len(survivals))
         if best_fitness == 0:
             break
 
         shuffle(survivals)  # Shuffle new survivals
-        new_survivals = []
-
-        while True:
-            solution_1, solution_2 = None, None
-
-            try:
-                solution_1 = survivals.pop()
-            except IndexError:  # Stop when no element left
-                break
-
-            try:
-                solution_2 = survivals.pop()
-            except IndexError:  # Stop when no element left
-                new_survivals.append(solution_2)
-                break
-            '''
-            randomly choose a crossover point
-            recombine the solutions to produce two new solution
-            '''
-            cross_point = randint(0, len(problem_grid) - 2)
-
-            temp_sub_grid = solution_1[cross_point]
-            solution_1[cross_point] = solution_2[cross_point + 1]
-            solution_2[cross_point + 1] = temp_sub_grid
-
-            new_survivals.append(solution_1)
-            new_survivals.append(solution_2)
+        old_survivals = deepcopy(survivals)
+        new_survivals = deepcopy(survivals)
 
         '''
-        Make candidate randomly swap possition of random subgrid(column and row)
+        Make candidate randomly swap subgrid(column and row)
         '''
         for candidate in new_survivals[0:int(len(new_survivals) * mutation_rate)]:
             random_sub_grid = randint(0, 8)
@@ -362,7 +338,10 @@ def solve(problem_grid, population_size=10, selection_rate=0.5, max_generations_
                 candidate[random_sub_grid][first_index] = candidate[random_sub_grid][second_index]
                 candidate[random_sub_grid][second_index] = tmp
         # Replace old survivals with new combined survivals
-        survivals.extend(new_survivals)
+        survivals = new_survivals
+
+        # survivals.extend(fitness_survivals)
+        survivals = new_survivals + old_survivals
 
     return survivals[0], best_fitness
 
@@ -374,9 +353,9 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--output-file", help="Output file to store problem's solution.",
                         type=str, default=None)
     parser.add_argument("-p", "--population-size", type=int, default=10000)
-    parser.add_argument("-s", "--selection-rate", type=float, default=1)
+    parser.add_argument("-s", "--selection-rate", type=float, default=0.5)
     parser.add_argument("-m", "--max-generations-count",
-                        type=int, default=10000)
+                        type=int, default=1000)
     parser.add_argument("-u", "--mutation-rate", type=float, default=0.05)
     parser.add_argument("-q", "--quiet", action="store_true")
     args = parser.parse_args()
@@ -395,31 +374,31 @@ if __name__ == '__main__':
                         int(i / sqrt_n) +
                         int(j / sqrt_n) * sqrt_n
                     ].append(line_values[i])
-            try:
-                solution, best_fitness = solve(
-                    problem_grid,
-                    population_size=args.population_size,
-                    selection_rate=args.selection_rate,
-                    max_generations_count=args.max_generations_count,
-                    mutation_rate=args.mutation_rate
-                )
-                output_str = "Best fitness value: " + \
-                    str(best_fitness) + '\n\n'
-                for a, b in same_column_indexes(solution, 0, 0, sqrt_n):
-                    row = list(get_cells_from_indexes(
-                        solution, same_row_indexes(solution, a, b, sqrt_n)))
+          # try:
+            solution, best_fitness = solve(
+                problem_grid,
+                population_size=args.population_size,
+                selection_rate=args.selection_rate,
+                max_generations_count=args.max_generations_count,
+                mutation_rate=args.mutation_rate
+            )
+            output_str = "Best fitness value: " + \
+                str(best_fitness) + '\n\n'
+            for a, b in same_column_indexes(solution, 0, 0, sqrt_n):
+                row = list(get_cells_from_indexes(
+                    solution, same_row_indexes(solution, a, b, sqrt_n)))
 
-                    output_str += " ".join([str(elem) for elem in row]) + '\n'
-                output_str = output_str
+                output_str += " ".join([str(elem) for elem in row]) + '\n'
+            output_str = output_str
 
-                if args.output_file:
-                    with open(args.output_file, "w") as output_file:
-                        output_file.write(output_str)
+            if args.output_file:
+                with open(args.output_file, "w") as output_file:
+                    output_file.write(output_str)
 
-                if not args.quiet:
-                    print(output_str[:-1])
+            if not args.quiet:
+                print(output_str[:-1])
 
-            except:
-                exit('Input problem is not solvable.')
+            # except:
+            #     exit('Input problem is not solvable.')
     except FileNotFoundError:
         exit("Input file not found.")
